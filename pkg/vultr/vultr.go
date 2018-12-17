@@ -2,49 +2,33 @@ package vultr
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 )
 
 var (
-	Trace   *log.Logger
-	Info    *log.Logger
-	Warning *log.Logger
-	Error   *log.Logger
-)
-
-func Init(
-	traceHandle io.Writer,
-	infoHandle io.Writer,
-	warningHandle io.Writer,
-	errorHandle io.Writer) {
-
-	Trace = log.New(traceHandle,
-		"TRACE: ",
-		log.Ldate|log.Ltime|log.Lshortfile)
-
-	Info = log.New(infoHandle,
+	info = log.New(os.Stderr,
 		"INFO: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
-
-	Warning = log.New(warningHandle,
-		"WARNING: ",
+	debug = log.New(os.Stderr,
+		"DEBUG: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
+	baseURL, _ = url.Parse("https://api.vultr.com/")
+)
 
-	Error = log.New(errorHandle,
-		"ERROR: ",
-		log.Ldate|log.Ltime|log.Lshortfile)
+// SetLogger specifies a custom logger for the library
+func SetLogger(info, debug *log.Logger) {
+	info = info
+	debug = debug
 }
 
 func getAPIKey() string {
 	return os.Getenv("VULTR_API_KEY")
 }
 
+// Client for use in library
 type Client struct {
 	BaseURL   *url.URL
 	UserAgent string
@@ -52,19 +36,14 @@ type Client struct {
 	httpClient *http.Client
 }
 
-type Account struct {
-	Balance           float32   `json:"balance,omitempty"`
-	PendingCharges    float32   `json:"pending_charges,omitempty"`
-	LastPaymentDate   time.Time `json:"last_payment_date,omitempty"`
-	LastPaymentAmount float32   `json:"last_payment_amount,omitempty"`
-}
-
+// AccountInfo returns the account details
 func (c *Client) AccountInfo() (*Account, error) {
 	rel := &url.URL{Path: "v1/account/info"}
 	u := c.BaseURL.ResolveReference(rel)
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
-		Error.Println(err)
+
+		info.Println(err)
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
@@ -72,8 +51,10 @@ func (c *Client) AccountInfo() (*Account, error) {
 	req.Header.Set("API-Key", getAPIKey())
 
 	resp, err := c.httpClient.Do(req)
+
 	if err != nil {
-		Error.Println(err)
+
+		info.Println(err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -81,9 +62,7 @@ func (c *Client) AccountInfo() (*Account, error) {
 	var account Account
 	err = json.NewDecoder(resp.Body).Decode(&account)
 	if err != nil {
-		fmt.Println(resp.Body)
-		fmt.Println(req)
-		fmt.Println(err)
+		info.Println(err)
 	}
 	return &account, err
 }
@@ -92,6 +71,6 @@ func NewClient(httpClient *http.Client) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	c := &Client{httpClient: httpClient}
+	c := &Client{httpClient: httpClient, UserAgent: "rdhushyanth-vulture", BaseURL: baseURL}
 	return c
 }
